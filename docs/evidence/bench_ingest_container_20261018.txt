@@ -1,0 +1,17 @@
+bench_ingest: 2000 records, 21 interleaved reps, 3 inner passes
+mix: OPEN 55%, EXEC_ENTER 12%, EXEC 12%, ARG 11%, EXIT 6%, NET 4%
+python 3.13.16 on x86_64
+CPU time per record, old = v3.5i ctypes.cast decoder
+
+paired:
+  decode alone             3.82 ->   2.07 µs   1.85x  (IQR 1.82-1.89, range 1.11-2.63, 21 pairs)
+  full ingest path         9.30 ->   6.99 µs   1.34x  (IQR 1.32-1.38, range 1.22-1.53, 21 pairs)
+    events/s (ingest)  108k -> 143k
+
+inside the new decode of one 392-byte EVENT record (cumulative, same run):
+  unpack the 392-byte struct                  0.32 µs  (+0.32)
+  + the four C-string conversions             1.24 µs  (+0.92)
+  + build the namedtuple (= full decode)      2.18 µs  (+0.94)
+  decode over the whole mix is 30 % of the ingest path
+
+These are container figures, not the 2 vCPU VM. Re-run there before quoting them as VM numbers.

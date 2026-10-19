@@ -1,0 +1,17 @@
+bench_nodes: 400 nodes per cell, python 3.8.20
+
+| node | 1 access | 20 accesses |
+|---|---|---|
+| FileNode | ~747 B | ~3.3 KB |
+| EndpointNode | ~356 B | ~2.8 KB |
+
+file (default --max-files 200000): ~149 MB typical, ~677 MB if every one is hot
+
+endpoint (default --max-endpoints 25000): ~9 MB typical, ~71 MB if every one is hot
+
+file-id sharing: 20000 processes x 6 distinct files = 120000 opens
+  unshared distinct fid objects  120000, retained   58.5 MB
+  shared   distinct fid objects       6, retained   43.0 MB
+  saving 15.5 MB (27 %); it grows as distinct files fall
+
+Interpreter-dependent. The VM runs 3.8.10; size the caps from a 3.8 run, not this one, unless they match.

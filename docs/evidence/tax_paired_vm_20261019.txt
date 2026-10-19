@@ -1,0 +1,52 @@
+tax_paired.py — VM 2026-10-19, kernel 5.4.0-216-generic, 2 vCPUs (VirtualBox)
+9 pairs per config, dd count=6000000 (12,000,000 syscalls),
+pinning: workload cpu0 / monitor cpu1, desktop session RUNNING (not quiesced).
+
+config       tp    ratio             IQR        ns/syscall*
+count_exit    0   0.9971   0.9536-1.0552         -0.4      <- CONTROL
+count_exec    2   1.1065   1.0786-1.1454         14.6
+count_open    4   1.1725   1.1628-1.2012         23.6
+count_net     6   1.1820   1.1410-1.1909         24.9
+count_all    12   1.1703   1.1415-1.3011         23.3
+
+* ns/syscall converted with ONE common bare cost (the control's bare arm,
+  1.641 s / 12M = 136.8 ns per bare syscall), not with each config's own bare
+  arm -- those wandered 1.5-3.9 s across the run, and using them would feed
+  the drift back in through the multiplication.
+
+Adjacent rungs (disjoint IQRs = a real difference):
+   0 ->  2 tp : DISJOINT, real increase
+   2 ->  4 tp : DISJOINT, real increase
+   4 ->  6 tp : overlap, no detectable difference
+   6 -> 12 tp : overlap, no detectable difference
+
+Control OK: 0.9971, within 5% of 1.0. Its IQR straddles 1.0, which is what a
+zero effect should look like.
+
+Reading: the tax saturates at 4 tracepoints. Tripling 4 -> 12 costs nothing
+detectable. Raw per-pair ratios are in the chat transcript of 2026-10-19.
+
+================================================================
+SECOND RUN, same machine and settings (reproduction check)
+================================================================
+  config       tp    ratio                 IQR  ns/syscall
+  count_exit    0   1.0319   0.9988-1.1055        4.1   (not resolved)
+  count_exec    2   1.1185   1.1123-1.1297       15.3
+  count_open    4   1.2180   1.1714-1.2672       28.1
+  count_net     6   1.1670   1.1174-1.1723       21.5
+  count_all    12   1.2351   1.1222-1.3744       30.3   (not resolved)
+
+Adjacent rungs:  0->2 DISJOINT | 2->4 DISJOINT | 4->6 overlap | 6->12 overlap
+Saturates at 4 tracepoints -- IDENTICAL to run 1.
+Control 1.0319 (within 5% of 1.0), IQR straddles 1.0 as a zero effect should.
+
+Reproduction summary
+  saturation point   4 tp   | 4 tp    <- the conclusion, reproduced
+  2 tp ns/syscall    14.6   | 15.3    <- the most stable number here
+  4 tp               23.6   | 28.1
+  6 tp               24.9   | 21.5
+  12 tp              23.3   | 30.3
+The 4/6/12 absolutes wander 21-30 ns but are mutually indistinguishable
+WITHIN each run, which is the claim being made. In run 2 the 6 tp rung came
+in BELOW the 4 tp rung; their IQRs overlap, so that is consistent with "no
+difference", not a contradiction of it.
