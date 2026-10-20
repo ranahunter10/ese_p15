@@ -12,3 +12,16 @@ Rules:
 
 First stage: **S1 — exporter**, `replay recording → entities.tsv + edges.tsv`
 to the contract in LANDSCAPE §5.1, gates S1(a)–(e).
+
+## S1 status (exporter) — gates (a)–(c)
+
+- `layer3/export_pidsmaker.py rec.p15raw out/` → `entities.tsv`, `edges.tsv`,
+  `export_meta.json`. Every open decision (D9, D23, D24, time base, …) is a
+  flag; `--help` lists them, the meta records the values used.
+- Gates: `layer3/tests/test_export_s1.py` — `ConservationGateTest` (a),
+  `DeterminismGateTest` (b), `DirectionGateTest` (c).
+- Mutation evidence: `layer3/tests/MUTANTS_S1.md`, re-run with
+  `python3 layer3/tests/mutate_s1.py`.
+- Gates (d) Postgres load and (e) PIDSMaker run: not started.
+- Default timestamps are **boot-relative CLOCK_MONOTONIC**, not unix epoch: a
+  P15R recording carries no wall-clock anchor (`--wall-offset-ns`).
