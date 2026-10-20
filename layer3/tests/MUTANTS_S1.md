@@ -94,3 +94,13 @@ One file opened > 2000 times — `/etc/ld.so.cache` on any real host — makes
 the reference and a *correct* export differ (probe: 3000 opens exported,
 2000 in the reference). S1(a) is exact only below every graph cap; pinned by
 `AccessCapLimitTest`.
+
+**Contract check against PIDSMaker's source (review, `0a0f41d` cloned and
+read).** `tsvread.loader_view` matches `create_database_provenance_benign.py`
+`load_entities`/`load_edges`/`build_entity_index_map`, and the 10-type
+vocabulary matches `rel2id_darpa_tc` (`dataset_utils.py:27-48`). Their
+`possible_events` (`:49-82`) lists `EVENT_OPEN` only as (file, subject) and
+(netflow, subject), so `--open-as open` now emits **file→process** (it was
+process→file). Mutant "OPEN back to process→file" is killed by three tests.
+The default accept mapping (`EVENT_CONNECT` sock→proc, as their own mapper
+does) is **not** in that table; it is reported, not changed (D24).

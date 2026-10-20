@@ -96,7 +96,7 @@ def expected_edges(graph, opts):
             both = reads[(ts, key)] > 0 and writes[(ts, key)] > 0
             if opts.open_as == "open":
                 if kind == WRITE or not both:
-                    out[(ts, "EVENT_OPEN", P(key), F)] += 1
+                    out[(ts, "EVENT_OPEN", F, P(key))] += 1
             elif kind == READ:
                 if opts.open_as == "rw-writeonly" and both:
                     must_drop["rw_open_read_collapsed"] += 1
@@ -485,12 +485,13 @@ class DirectionGateTest(_Tmp):
                       rows)
         self.assertEqual(report["out_of_vocabulary_types"], ["EVENT_ACCEPT"])
 
-    def test_open_as_open_is_one_process_to_file_edge_per_open(self):
+    def test_open_as_open_is_one_file_to_process_edge_per_open(self):
+        # file->process, as PIDSMaker's own possible_events has it (review).
         rows, report = self.export(open_as="open")
         opens = [r for r in rows if r[0] == "EVENT_OPEN"]
-        self.assertEqual(sorted(d[1] for _t, _s, d in opens),
+        self.assertEqual(sorted(s[1] for _t, s, _d in opens),
                          ["/etc/passwd", "/tmp/both", "/tmp/out"])
-        self.assertTrue(all(s[0] == "PROC" for _t, s, _d in opens))
+        self.assertTrue(all(d[0] == "PROC" for _t, _s, d in opens))
         self.assertFalse([r for r in rows if r[0] in ("EVENT_READ", "EVENT_WRITE")])
         self.assertEqual(report["open_modes"], {"R": 1, "RW": 1, "W": 1})
 

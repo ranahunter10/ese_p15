@@ -133,6 +133,36 @@ class ReviewMutantsTest(_Tmp):
             self.assertIs(self.meta(out)["loader_patch_required"], want, ts)
 
 
+class PidsmakerSchemaTest(_Tmp):
+    """Every (src type, dst type, event) the export emits is checked against
+    PIDSMaker's possible_events (spider @ 0a0f41d, dataset_utils.py:49-82),
+    where an unlisted triplet is silently filed as triplet 0 if hetero
+    features are on. Found in review by reading their source."""
+
+    def _report(self, **kw):
+        path = self.p("r.p15raw")
+        if not os.path.exists(path):
+            recgen.direction_scenario().write(path)
+        return ex.export_recording(path, self.p("o" + str(len(kw))),
+                                   ex.ExportOptions(**kw))
+
+    def test_open_edges_are_in_their_schema(self):
+        r = self._report(open_as="open")
+        self.assertFalse([k for k in r["out_of_schema_triplets"] if "EVENT_OPEN" in k])
+
+    def test_default_accept_mapping_is_reported_as_off_schema(self):
+        # Their own audit mapper emits accept as EVENT_CONNECT sock->proc,
+        # yet their schema has no (netflow, subject, EVENT_CONNECT). D24.
+        r = self._report()
+        self.assertEqual(r["out_of_schema_triplets"], {"SOCK->PROC EVENT_CONNECT": 1})
+
+    def test_every_other_default_edge_is_in_their_schema(self):
+        r = self._report()
+        n_off = sum(r["out_of_schema_triplets"].values())
+        self.assertEqual(n_off, 1)
+        self.assertGreater(r["edges"], n_off)
+
+
 class AccessCapLimitTest(_Tmp):
     """Not a mutant: a limit of the S1(a) REFERENCE, found in review.
 

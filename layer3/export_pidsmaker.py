@@ -67,6 +67,28 @@ PIDSMAKER_VOCAB = ("EVENT_CONNECT", "EVENT_EXECUTE", "EVENT_OPEN", "EVENT_READ",
                    "EVENT_RECVFROM", "EVENT_RECVMSG", "EVENT_SENDMSG",
                    "EVENT_SENDTO", "EVENT_WRITE", "EVENT_CLONE")
 
+# PIDSMaker's `possible_events` (spider @ 0a0f41d,
+# pidsmaker/utils/dataset_utils.py:49-82): the (src type, dst type, event)
+# triplets its schema knows, with PROC=subject, FILE=file, SOCK=netflow.
+# Only heterogeneous encoders and `use_triplet_types: True` read it — both
+# off in the shipped configs — but there an unlisted triplet is not
+# rejected: `get_triplet_edge_types` (data_utils.py:329-335) takes argmax of
+# an all-False match row and silently files the edge as triplet 0
+# (subject, subject, EVENT_READ). So the export reports any it emits.
+_S, _F, _N = "PROC", "FILE", "SOCK"
+POSSIBLE_TRIPLETS = frozenset(
+    [(_S, _S, e) for e in ("EVENT_READ", "EVENT_WRITE", "EVENT_OPEN", "EVENT_CONNECT",
+                           "EVENT_RECVFROM", "EVENT_SENDTO", "EVENT_CLONE",
+                           "EVENT_SENDMSG", "EVENT_RECVMSG")]
+    + [(_S, _F, e) for e in ("EVENT_WRITE", "EVENT_CONNECT", "EVENT_SENDMSG",
+                             "EVENT_SENDTO", "EVENT_CLONE")]
+    + [(_S, _N, e) for e in ("EVENT_WRITE", "EVENT_SENDTO", "EVENT_CONNECT",
+                             "EVENT_SENDMSG")]
+    + [(_F, _S, e) for e in ("EVENT_READ", "EVENT_OPEN", "EVENT_RECVFROM",
+                             "EVENT_EXECUTE", "EVENT_RECVMSG")]
+    + [(_N, _S, e) for e in ("EVENT_OPEN", "EVENT_READ", "EVENT_RECVFROM",
+                             "EVENT_RECVMSG")])
+
 ENTITIES_HEADER = "entity_id\tentity_type\tentity_text"
 EDGES_HEADER = "src_id\tevent_type\tdst_id\ttimestamp"
 
@@ -100,9 +122,12 @@ class ExportOptions(object):
                      W -> WRITE proc->file, RW -> BOTH (exactly what
                      ProcessGraph.record_open itself records). "rw-writeonly":
                      like PIDSMaker's audit mapper, RW -> WRITE only.
-                     "open": one EVENT_OPEN proc->file per open (D9); the
+                     "open": one EVENT_OPEN file->proc per open (D9); the
                      mode is not representable in the 4-column contract and
-                     is only counted in the meta.
+                     is only counted in the meta. Direction file->proc is
+                     PIDSMaker's own: its schema lists EVENT_OPEN only for
+                     (file, subject) and (netflow, subject), never
+                     (subject, file) — see POSSIBLE_TRIPLETS.
     accept_as        D24. "connect": an accepted connection becomes
                      EVENT_CONNECT sock->proc (their mapper; in vocabulary).
                      "accept": EVENT_ACCEPT sock->proc (D10) — OUTSIDE their
@@ -390,7 +415,7 @@ def collect(graph, opts=None):
             note_path(fid, ts, path)
             open_modes[mode] += 1
             if opts.open_as == "open":
-                raw.append((ts, "EVENT_OPEN", P, F))
+                raw.append((ts, "EVENT_OPEN", F, P))
                 continue
             if "R" in mode:
                 if opts.open_as == "rw-writeonly" and "W" in mode:
@@ -510,6 +535,8 @@ def collect(graph, opts=None):
     nodes_by_type[SOCK] = len(graph.endpoints)
     ent_by_type = Counter(e[1] for e in entities)
     out_of_vocab = sorted(set(e[1] for e in edges) - set(PIDSMAKER_VOCAB))
+    off_schema = Counter("%s->%s %s" % (s[0], d[0], et) for _ts, et, s, d in raw
+                         if (s[0], d[0], et) not in POSSIBLE_TRIPLETS)
     report = OrderedDict([
         ("edges", len(edges)),
         ("entities", len(entities)),
@@ -529,6 +556,7 @@ def collect(graph, opts=None):
         ("open_modes", OrderedDict(sorted(open_modes.items()))),
         ("proc_text_from_comm", from_comm),
         ("out_of_vocabulary_types", out_of_vocab),
+        ("out_of_schema_triplets", OrderedDict(sorted(off_schema.items()))),
         ("graph_stats", OrderedDict(sorted(graph.stats.items()))),
     ])
     return entities, edges, report
@@ -658,6 +686,10 @@ def summarize(report, opts, out=sys.stderr):
     if report["out_of_vocabulary_types"]:
         w("  WARNING: types outside PIDSMaker's 10: %s\n"
           % ", ".join(report["out_of_vocabulary_types"]))
+    if report["out_of_schema_triplets"]:
+        w("  NOTE: triplets outside PIDSMaker's possible_events (matters only "
+          "for hetero encoders / use_triplet_types): %s\n"
+          % ", ".join("%s=%d" % kv for kv in report["out_of_schema_triplets"].items()))
     if opts.wall_offset_ns == 0:
         w("  WARNING: timestamps are boot-relative CLOCK_MONOTONIC, not unix "
           "epoch (no --wall-offset-ns given)\n")
