@@ -54,3 +54,33 @@ are written by the script to `OUT_DIR/<id>/log.txt`.
 - M13 is caught directly only by the latency test, so the wrapper's
   `dec_valid` contract rests on that one directed check plus the
   every-cycle model compare.
+
+## Manager review — independent sweep (20 Oct 2026)
+
+Eight mutants imagined by the reviewer, not the RTL author, each run through
+the full `run_f1.sh` gate on a copy of `fpga/`. **7 of 7 non-equivalent
+mutants killed; X8 is the same equivalent mutant as M10, by the same proof.**
+
+| # | Mutation | Result |
+|---|---|---|
+| X1 | flagged packet keeps the OLD timestamp (refill double-counted next call) | killed, 105 FAIL |
+| X2 | flagged packet discards its accrued refill (stores `tok_in`, not `avail`) | killed, 108 FAIL |
+| X3 | `SUM_W` one bit narrower | killed, 13 FAIL — **only by the U3 parameter set** (at defaults 1e11 < 2^37, so the narrower sum still fits) |
+| X4 | counter advances only on packets (time frozen while idle) | killed, 16 FAIL |
+| X5 | reset leaves the counter running | killed, 25 FAIL |
+| X6 | clamp at `T_FULL − 1` | killed, 7 FAIL |
+| X7 | reset does not clear `flag` | killed, 2 FAIL (`W1/W2 reset_dec_valid_low`) |
+| X8 | `full` ignores `st_valid` | survives — equivalent (= M10) |
+
+X3 is the second mutant (after M8) that only a non-default parameter set
+catches: the parameter sweep is load-bearing, not decoration.
+
+**Independent oracle.** `fpga/sim/check_f1_rational.py` re-derives every
+hand-computed directed answer (9981; 2,495,500 at 499.00019996 s; 0/1/2 flags
+for R+1; 5499→0, 5500→1 at index 5490; straddle 555 / 8501 with 5000 per
+window; back-to-back 504 / 99,496; B = 1: 0 / 2500 / 2501) with exact
+rationals in packets and seconds instead of the RTL's scaled integers:
+**0 mismatches** on Python 3.8.20 and 3.13.16.
+
+**xsim fallback path.** Compiled with `-DF1_NO_FATAL` under Icarus
+`-g2001`: `SUMMARY: 185 passed, 0 failed`. Still not run in xsim.
