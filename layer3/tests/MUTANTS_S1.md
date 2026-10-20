@@ -104,3 +104,30 @@ vocabulary matches `rel2id_darpa_tc` (`dataset_utils.py:27-48`). Their
 process→file). Mutant "OPEN back to process→file" is killed by three tests.
 The default accept mapping (`EVENT_CONNECT` sock→proc, as their own mapper
 does) is **not** in that table; it is reported, not changed (D24).
+
+## Real VM fixture `s1_mixed`: gates S1(b-vm) and S1(m) (20 Oct 2026)
+
+`layer3/tests/test_vm_fixture_s1.py`, 9 tests. Each mutant below was run
+twice: once against the VM-fixture tests alone (`-p test_vm_fixture_s1.py`)
+and once against the full suite. Python 3.8.20.
+
+| # | Mutant | VM tests alone | Full suite |
+|---|---|---|---|
+| V1 | accepts not exported | killed: `test_accept_on_127_0_0_1_port_8765` | killed |
+| V2 | READ written process→file | killed: exec-chain and file-flow tests | killed |
+| V3 | `--wall-offset-ns` ignored | killed: anchor, accept and outbound tests | killed |
+| V4 | entity order taken from set iteration | killed: `test_export_of_two_fresh_replays_is_byte_identical` | killed |
+| V5 | only a process's last exec exported | killed: `test_exec_chain_bash_sh_cat` | killed |
+| V6 | repeated connects to one peer merged | killed: `test_connect_to_example_com` | killed |
+| V7 | edges sorted by time only, ties left in arrival order | **survives, by construction** | killed: `test_arrival_order_of_tied_records_does_not_change_the_export` |
+| V8 | CLONE into `cat` dropped | killed: exec-chain and file-flow tests | killed |
+
+Why V7 survives the VM tests: one recording always replays in one order, so
+a tiebreak by arrival order is still deterministic on that recording.
+Byte-identity across runs of a single recording cannot detect it. Only a
+second recording with the tied records swapped can, and that is the
+synthetic test.
+
+The first version of V6 (`set(node.conns)`) was an equivalent mutant,
+because every connect has its own timestamp, so the set merged nothing. It
+was replaced by a real merge on the peer.
