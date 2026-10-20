@@ -61,3 +61,36 @@ All killing tests are in `layer3/tests/test_export_s1.py`; class prefixes
   are each exercised by a test — conservation is re-checked under every
   option set, and `CloneParentOptionTest` / the Direction tests pin the
   option-specific output — but no mutant targets those branches.
+
+## Manager review — independent sweep (20 Oct 2026)
+
+A second sweep by someone other than the author, run as a full
+`layer3/run_tests.sh` per mutant on Python 3.8.20. First pass: 16 mutants,
+10 killed. Tests added in `test_export_review.py`; second pass: **15 of 16
+killed, the survivor equivalent.**
+
+| # | Mutant | Killed by |
+|---|---|---|
+| R1 | exe not space-escaped | `test_the_hostile_strings_are_recoverable_exactly` |
+| R2 | unix SOCK path not space-escaped | `test_the_hostile_strings_are_recoverable_exactly` |
+| R3 | FILE text = oldest name | **new** `test_file_text_is_the_newest_name_the_graph_holds` |
+| R4 | CLONE stamped at `start_ns`, not `_fork_ts` | **new** `test_clone_uses_the_graph_fork_time_for_an_estimated_start` |
+| R5 | probe filter `endswith("0")` (drops port 80) | conservation, option set `probe_endpoints=drop` |
+| R6 | `rw-writeonly` collapses every read | conservation + `test_rw_writeonly_collapses_rw_to_write_and_counts_it` |
+| R7 | control chars < 0x20 pass through | `test_escape_round_trips_every_awkward_character` |
+| R8 | cmdline not escaped | hostile-strings, id-parse, referenced-nodes tests |
+| R9 | CLI ignores the bootstrap sidecar | **new** `test_the_cli_uses_the_bootstrap_sidecar` |
+| R10 | failed opens not reported | `test_graph_side_non_edges_are_reported` |
+| R11 | `unix_endpoints=drop` ignored for accepts | conservation, option set `unix_endpoints=drop` |
+| R12 | tiebreak compares dst before src | **equivalent** — still a total, deterministic order; no test should kill it |
+| R13 | unknown endpoint scheme kept | **new** `test_an_unknown_endpoint_scheme_is_dropped_by_name` |
+| R14 | space escaping on `" "` only (not NBSP etc.) | `test_escape_round_trips_every_awkward_character` |
+| R15 | negative wall offset accepted | `test_a_negative_offset_is_refused` |
+| R16 | meta never flags the loader patch | **new** `test_meta_says_when_their_loader_must_be_patched` |
+
+**Limit found in review (not a defect):** the S1(a) reference reads
+`FileNode.accesses`, which the graph trims at `MAX_ACCESSES_PER_FILE` (2000).
+One file opened > 2000 times — `/etc/ld.so.cache` on any real host — makes
+the reference and a *correct* export differ (probe: 3000 opens exported,
+2000 in the reference). S1(a) is exact only below every graph cap; pinned by
+`AccessCapLimitTest`.
